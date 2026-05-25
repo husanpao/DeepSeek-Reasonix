@@ -41,6 +41,8 @@ function renderPanel() {
       mcpBridged={false}
       sessionFiles={[{ path: "src/new-file.ts", status: "m" }]}
       memory={[]}
+      memoryDetail={null}
+      onReadMemory={() => {}}
     />,
   );
 }
