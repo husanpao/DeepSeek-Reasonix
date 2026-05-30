@@ -310,6 +310,64 @@ fn write_text_file(path: String, content: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn rename_file(path: String, new_name: String) -> Result<(), String> {
+    let parent = std::path::Path::new(&path).parent();
+    match parent {
+        Some(p) => {
+            let dest = p.join(&new_name);
+            std::fs::rename(&path, &dest).map_err(|e| format!("rename failed: {e}"))
+        }
+        None => Err("cannot rename root".into()),
+    }
+}
+
+#[tauri::command]
+fn delete_file(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    if p.is_dir() {
+        std::fs::remove_dir_all(p).map_err(|e| format!("delete dir failed: {e}"))
+    } else {
+        std::fs::remove_file(p).map_err(|e| format!("delete file failed: {e}"))
+    }
+}
+
+#[tauri::command]
+fn create_dir(path: String) -> Result<(), String> {
+    std::fs::create_dir_all(&path).map_err(|e| format!("mkdir failed: {e}"))
+}
+
+#[tauri::command]
+fn reveal_in_explorer(path: String) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        std::process::Command::new("explorer")
+            .arg("/select,")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("explorer failed: {e}"))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("open failed: {e}"))?;
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        // Linux: open parent dir
+        if let Some(parent) = std::path::Path::new(&path).parent() {
+            std::process::Command::new("xdg-open")
+                .arg(parent)
+                .spawn()
+                .map_err(|e| format!("xdg-open failed: {e}"))?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn read_text_file(path: String) -> Result<String, String> {
     const MAX_BYTES: u64 = 1_048_576; // 1 MB
     let meta = std::fs::metadata(&path).map_err(|e| format!("read metadata: {e}"))?;
@@ -405,6 +463,10 @@ fn main() {
             git_status,
             write_text_file,
             read_text_file,
+            rename_file,
+            delete_file,
+            create_dir,
+            reveal_in_explorer,
             save_clipboard_image
         ])
         .setup(|app| {

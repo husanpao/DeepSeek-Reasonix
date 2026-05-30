@@ -461,6 +461,10 @@ export const en = {
       taskComplete: "Task complete",
     },
     selectFileToView: "Select a file to view",
+    save: "Save",
+    saving: "Saving…",
+    openInEditor: "Open in editor",
+    close: "Close",
     cmd: {
       newSession: "New session",
       clearChat: "Clear screen",

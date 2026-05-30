@@ -2106,6 +2106,7 @@ html:not([data-platform="macos"]) .shortcut kbd[data-key="mod"] {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
 .file-tree-header {
   display: flex;
@@ -2355,6 +2356,7 @@ html:not([data-platform="macos"]) .shortcut kbd[data-key="mod"] {
 }
 
 .file-content-viewer {
+  flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -2363,93 +2365,90 @@ html:not([data-platform="macos"]) .shortcut kbd[data-key="mod"] {
   background: var(--bg);
 }
 .fcv-header {
+  display: none;
+}
+
+/* ---------- EDITOR TABS ---------- */
+
+.editor-tabs {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: 0;
+  padding: 0;
   border-bottom: 1px solid var(--border);
   background: var(--bg-2);
   flex: 0 0 auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-height: 34px;
 }
-.fcv-icon {
-  display: inline-flex;
-  color: var(--muted);
-  flex-shrink: 0;
-}
-.fcv-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--fg);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fcv-path {
-  font-size: 11px;
-  color: var(--muted-2);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex-shrink: 2;
-}
-.fcv-spacer {
-  flex: 1;
-}
-.fcv-btn {
-  display: inline-flex;
+.editor-tab {
+  display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--card);
-  color: var(--fg-2);
-  font-size: 12px;
-  font-family: inherit;
+  gap: 6px;
+  padding: 0 12px;
+  height: 34px;
+  border-right: 1px solid var(--border);
   cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
   flex-shrink: 0;
+  user-select: none;
+  transition: none;
 }
-.fcv-btn:hover {
-  border-color: var(--border-strong);
-  color: var(--fg);
+.editor-tab:hover {
   background: var(--card-hover);
+  color: var(--fg-2);
 }
-.fcv-close {
+.editor-tab.active {
+  background: var(--bg);
+  color: var(--fg);
+  border-bottom: 2px solid var(--accent);
+  margin-bottom: -1px;
+}
+.editor-tab-name {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.editor-tab-dirty {
+  color: var(--accent);
+  font-size: 10px;
+  line-height: 1;
+}
+.editor-tab-close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 18px;
+  height: 18px;
   border: none;
-  border-radius: 5px;
+  border-radius: 4px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
   flex-shrink: 0;
+  padding: 0;
 }
-.fcv-close:hover {
+.editor-tab-close:hover {
+  background: var(--card-hover);
   color: var(--fg);
-  background: var(--panel);
 }
+
+/* ---------- EDITOR BODY ---------- */
+
 .fcv-body {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: auto;
+  position: relative;
+  overflow: hidden;
 }
-.fcv-content {
-  margin: 0;
-  padding: 16px;
-  font-family: Geist Mono, monospace, "Courier New";
-  font-size: 13px;
-  line-height: 1.55;
-  tab-size: 2;
-  white-space: pre;
-  overflow: auto;
-  color: var(--fg);
+.fcv-monaco-editor {
+  position: absolute;
+  inset: 0;
 }
 .fcv-loading {
   flex: 1;
@@ -2460,21 +2459,138 @@ html:not([data-platform="macos"]) .shortcut kbd[data-key="mod"] {
   color: var(--muted-2);
   font-size: 13px;
 }
-.fcv-error {
-  flex: 1;
+
+/* ---------- UNSAVED CONFIRM DIALOG ---------- */
+
+.confirm-dialog-mask {
+  position: absolute;
+  inset: 0;
+  background: oklch(0% 0 0 / 0.45);
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 32px;
-  color: var(--danger, oklch(65% 0.18 35));
-  font-size: 12px;
-  text-align: center;
-  word-break: break-word;
+  z-index: 10;
 }
-.fcv-error .ico {
-  opacity: 0.6;
+.confirm-dialog {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 24px;
+  min-width: 320px;
+  max-width: 420px;
+  box-shadow: var(--shadow-lg);
+}
+.confirm-dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+  margin-bottom: 12px;
+}
+.confirm-dialog-body {
+  font-size: 13px;
+  color: var(--fg-2);
+  line-height: 1.5;
+  margin-bottom: 18px;
+}
+.confirm-dialog-body strong {
+  color: var(--fg);
+  word-break: break-all;
+}
+.confirm-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.confirm-dialog-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--fg-2);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.confirm-dialog-btn:hover {
+  border-color: var(--border-strong);
+  color: var(--fg);
+  background: var(--card-hover);
+}
+.confirm-dialog-save {
+  background: var(--accent);
+  border-color: transparent;
+  color: oklch(99% 0 0);
+}
+.confirm-dialog-save:hover {
+  background: var(--accent-strong);
+  color: oklch(99% 0 0);
+}
+.confirm-dialog-discard {
+  color: var(--danger, oklch(65% 0.18 35));
+}
+.confirm-dialog-cancel {
+}
+
+/* ---------- TAB / FILE-TREE CONTEXT MENU ---------- */
+
+.ctx-menu {
+  position: fixed;
+  z-index: 100;
+  min-width: 160px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: var(--shadow-lg);
+}
+.ctx-menu-item {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--fg-2);
+  cursor: pointer;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.ctx-menu-item:hover {
+  background: var(--card-hover);
+  color: var(--fg);
+}
+.ctx-menu-sep {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--border);
+}
+
+/* ---------- INPUT DIALOG ---------- */
+
+.input-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.input-dialog-label {
+  font-size: 12px;
+  color: var(--fg-2);
+}
+.input-dialog-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font-size: 13px;
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  outline: none;
+}
+.input-dialog-input:focus {
+  border-color: var(--accent);
 }
 
 /* ---------- MAIN ---------- */

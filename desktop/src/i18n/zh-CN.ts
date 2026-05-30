@@ -484,6 +484,10 @@ export const zhCN: typeof en = {
       taskComplete: "任务已完成",
     },
     selectFileToView: "选择一个文件查看",
+    save: "保存",
+    saving: "保存中…",
+    openInEditor: "在编辑器中打开",
+    close: "关闭",
     cmd: {
       newSession: "新建会话",
       clearChat: "清屏",

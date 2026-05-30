@@ -1487,7 +1487,8 @@ function TabRuntime({
   const [aboutOpen, setAboutOpen] = useState(false);
   const [contextPanelTab, setContextPanelTab] = useState<ContextPanelTab>("chat");
   const [contextPanelTabNonce, setContextPanelTabNonce] = useState(0);
-  const [fileViewPath, setFileViewPath] = useState<string | null>(null);
+  const [openFiles, setOpenFiles] = useState<string[]>([]);
+  const [activeFile, setActiveFile] = useState<string | null>(null);
   const previousApprovalSnapshotRef = useRef<ApprovalSnapshot>({
     confirms: [],
     pathAccess: [],
@@ -2580,7 +2581,8 @@ function TabRuntime({
             if (editor?.trim()) {
               await invoke("open_in_editor", { command: editor, path, line: null });
             }
-            setFileViewPath(path);
+            setOpenFiles(prev => prev.includes(path) ? prev : [...prev, path]);
+            setActiveFile(path);
           }}
           onCopyMd={conversationCopy}
           onExportMd={exportConversation}
@@ -2597,15 +2599,21 @@ function TabRuntime({
         ) : null}
         
         <main className="main" style={{ position: "relative" }}>
-          {fileViewPath ? (
+          {openFiles.length > 0 ? (
             <FileContentViewer
-              filePath={fileViewPath}
-              onClose={() => setFileViewPath(null)}
-              onOpenInEditor={async (path) => {
-                const editor = state.settings?.editor;
-                if (editor?.trim()) {
-                  await invoke("open_in_editor", { command: editor, path, line: null });
-                }
+              openFiles={openFiles}
+              activeFile={activeFile}
+              theme={theme}
+              onSetActiveFile={setActiveFile}
+              onCloseFile={(path) => {
+                setOpenFiles(prev => prev.filter(f => f !== path));
+                setActiveFile(prev => {
+                  if (prev !== path) return prev;
+                  const idx = openFiles.indexOf(path);
+                  if (idx > 0) return openFiles[idx - 1];
+                  if (idx + 1 < openFiles.length) return openFiles[idx + 1];
+                  return null;
+                });
               }}
             />
           ) : (

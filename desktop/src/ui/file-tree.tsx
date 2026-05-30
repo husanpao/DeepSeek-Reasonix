@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t, useLang } from "../i18n";
 import { I } from "../icons";
+import { ConfirmDialog } from "./confirm-dialog";
+import { InputDialog } from "./input-dialog";
 
 // --------------- types ---------------
 
@@ -103,6 +105,32 @@ export function FileTree({
   const [loadError, setLoadError] = useState<string | null>(null);
   const expandedRef = useRef<Set<string>>(new Set());
   const treeCache = useRef<Map<string, TreeNode[]>>(new Map());
+  const [ctxMenu, setCtxMenu] = useState<{
+    x: number;
+    y: number;
+    path: string;
+    kind: "dir" | "file";
+  } | null>(null);
+  const [inputDialog, setInputDialog] = useState<{
+    title: string;
+    label: string;
+    initialValue: string;
+    placeholder: string;
+    onSubmit: (value: string) => Promise<void> | void;
+  } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    path: string;
+    name: string;
+    kind: "dir" | "file";
+  } | null>(null);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    requestAnimationFrame(() => window.addEventListener("click", close, { once: true }));
+    return () => window.removeEventListener("click", close);
+  }, [ctxMenu]);
 
   // Build children for a given parent path from the flat entry list
   const buildChildren = useCallback(
@@ -221,6 +249,182 @@ export function FileTree({
     return result;
   };
 
+  // --------------- context menu handlers ---------------
+
+  const handleNodeContextMenu = useCallback(
+    (path: string, kind: "dir" | "file", e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setCtxMenu({ x: e.clientX, y: e.clientY, path, kind });
+    },
+    [],
+  );
+
+  const handleBgContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!workspaceDir) return;
+    setCtxMenu({ x: e.clientX, y: e.clientY, path: workspaceDir, kind: "dir" });
+  }, [workspaceDir]);
+
+  const refreshTree = useCallback(() => {
+    setCtxMenu(null);
+    void loadTree();
+  }, [loadTree]);
+
+  const openInEditor = useCallback(() => {
+    const p = ctxMenu?.path;
+    setCtxMenu(null);
+    if (p) onOpenFile(p);
+  }, [ctxMenu, onOpenFile]);
+
+  // New file
+  const startNewFile = useCallback(() => {
+    const dir = ctxMenu?.kind === "dir" ? ctxMenu.path : null;
+    setCtxMenu(null);
+    if (!dir && !workspaceDir) return;
+    setInputDialog({
+      title: "新建文件",
+      label: "文件名",
+      initialValue: "",
+      placeholder: "例如: index.ts",
+      async onSubmit(value) {
+        const base = (dir || workspaceDir)!.replace(/\\/g, "/");
+        const fullPath = base + "/" + value;
+        try {
+          await invoke("write_text_file", { path: fullPath, content: "" });
+          await loadTree();
+          onOpenFile(fullPath);
+        } catch (err) {
+          console.error("create file failed", err);
+        }
+      },
+    });
+  }, [ctxMenu, workspaceDir, loadTree, onOpenFile]);
+
+  const startNewFolder = useCallback(() => {
+    const dir = ctxMenu?.kind === "dir" ? ctxMenu.path : null;
+    setCtxMenu(null);
+    if (!dir && !workspaceDir) return;
+    setInputDialog({
+      title: "新建文件夹",
+      label: "文件夹名",
+      initialValue: "",
+      placeholder: "例如: src",
+      async onSubmit(value) {
+        const base = (dir || workspaceDir)!.replace(/\\/g, "/");
+        const fullPath = base + "/" + value;
+        try {
+          await invoke("create_dir", { path: fullPath });
+          await loadTree();
+        } catch (err) {
+          console.error("create dir failed", err);
+        }
+      },
+    });
+  }, [ctxMenu, workspaceDir, loadTree]);
+
+  const startRename = useCallback(() => {
+    const p = ctxMenu?.path;
+    const kind = ctxMenu?.kind;
+    setCtxMenu(null);
+    if (!p) return;
+    const name = p.split(/[\\/]/).pop() ?? "";
+    setInputDialog({
+      title: kind === "dir" ? "重命名文件夹" : "重命名文件",
+      label: "新名称",
+      initialValue: name,
+      placeholder: "",
+      async onSubmit(value) {
+        if (value === name) return;
+        try {
+          await invoke("rename_file", { path: p, newName: value });
+          await loadTree();
+        } catch (err) {
+          console.error("rename failed", err);
+        }
+      },
+    });
+  }, [ctxMenu, loadTree]);
+
+  const handleDelete = useCallback(() => {
+    const p = ctxMenu?.path;
+    const kind = ctxMenu?.kind;
+    setCtxMenu(null);
+    if (!p) return;
+    const name = p.split(/[\\/]/).pop() ?? p;
+    setDeleteConfirm({ path: p, name, kind: kind ?? "file" });
+  }, [ctxMenu]);
+
+  const confirmDelete = useCallback(async () => {
+    const d = deleteConfirm;
+    if (!d) return;
+    setDeleteConfirm(null);
+    try {
+      await invoke("delete_file", { path: d.path });
+      await loadTree();
+    } catch (err) {
+      console.error("delete failed", err);
+    }
+  }, [deleteConfirm, loadTree]);
+
+  const handleReveal = useCallback(() => {
+    const p = ctxMenu?.path;
+    setCtxMenu(null);
+    if (p) {
+      void invoke("reveal_in_explorer", { path: p });
+    }
+  }, [ctxMenu]);
+
+  // --------------- header toolbar handlers ---------------
+
+  const handleHeaderNewFile = useCallback(() => {
+    if (!workspaceDir) return;
+    setInputDialog({
+      title: "新建文件",
+      label: "文件名",
+      initialValue: "",
+      placeholder: "例如: index.ts",
+      async onSubmit(value) {
+        const fullPath = workspaceDir.replace(/\\/g, "/") + "/" + value;
+        try {
+          await invoke("write_text_file", { path: fullPath, content: "" });
+          await loadTree();
+          onOpenFile(fullPath);
+        } catch (err) {
+          console.error("create file failed", err);
+        }
+      },
+    });
+  }, [workspaceDir, loadTree, onOpenFile]);
+
+  const handleHeaderNewFolder = useCallback(() => {
+    if (!workspaceDir) return;
+    setInputDialog({
+      title: "新建文件夹",
+      label: "文件夹名",
+      initialValue: "",
+      placeholder: "例如: src",
+      async onSubmit(value) {
+        const fullPath = workspaceDir.replace(/\\/g, "/") + "/" + value;
+        try {
+          await invoke("create_dir", { path: fullPath });
+          await loadTree();
+        } catch (err) {
+          console.error("create dir failed", err);
+        }
+      },
+    });
+  }, [workspaceDir, loadTree]);
+
+  const handleCollapseAll = useCallback(() => {
+    expandedRef.current = new Set();
+    const allEntries = treeCache.current.get("__entries") as unknown as FileEntry[] | undefined;
+    if (!allEntries || !workspaceDir) return;
+    const rootChildren = buildChildren(allEntries, workspaceDir.replace(/\\/g, "/"));
+    setChildren(rootChildren);
+  }, [workspaceDir, buildChildren]);
+
   const renderNode = (node: TreeNode, depth: number): React.ReactNode => {
     const gitStatus = gitStatusMap.get(node.path.replace(/\\/g, "/"));
     const isHidden = node.name.startsWith(".") && node.name !== "..";
@@ -237,6 +441,7 @@ export function FileTree({
               onOpenFile(node.path);
             }
           }}
+          onContextMenu={(e) => handleNodeContextMenu(node.path, node.kind, e)}
           title={node.path}
           role="treeitem"
           aria-expanded={node.kind === "dir" ? node.expanded : undefined}
@@ -332,6 +537,33 @@ export function FileTree({
     );
   }
 
+  const isRoot = ctxMenu?.path === workspaceDir;
+  const ctxItems =
+    ctxMenu?.kind === "file"
+      ? [
+          { label: "在编辑器中打开", fn: openInEditor },
+          { type: "sep" as const },
+          { label: "重命名", fn: startRename },
+          { label: "删除", fn: handleDelete },
+          { type: "sep" as const },
+          { label: "在资源管理器中显示", fn: handleReveal },
+        ]
+      : [
+          { label: "新建文件", fn: startNewFile },
+          { label: "新建文件夹", fn: startNewFolder },
+          ...(!isRoot
+            ? [
+                { type: "sep" as const },
+                { label: "重命名", fn: startRename },
+                { label: "删除", fn: handleDelete },
+              ]
+            : []),
+          { type: "sep" as const },
+          { label: "在资源管理器中显示", fn: handleReveal },
+          { type: "sep" as const },
+          { label: "刷新", fn: refreshTree },
+        ];
+
   return (
     <div className="file-tree" role="tree">
       <div className="file-tree-header">
@@ -341,15 +573,94 @@ export function FileTree({
         <button
           type="button"
           className="ft-refresh-btn"
+          title="新建文件"
+          onClick={handleHeaderNewFile}
+        >
+          <I.filePlus size={14} />
+        </button>
+        <button
+          type="button"
+          className="ft-refresh-btn"
+          title="新建文件夹"
+          onClick={handleHeaderNewFolder}
+        >
+          <I.folderPlus size={14} />
+        </button>
+        <button
+          type="button"
+          className="ft-refresh-btn"
+          title="折叠文件夹"
+          onClick={handleCollapseAll}
+        >
+          <I.chev size={12} className="ft-chev-collapse" />
+        </button>
+        <button
+          type="button"
+          className="ft-refresh-btn"
           title={t("fileTree.refresh")}
           onClick={() => void loadTree()}
         >
           <I.refresh size={12} />
         </button>
       </div>
-      <div className="file-tree-scroll">
+      <div className="file-tree-scroll" onContextMenu={handleBgContextMenu}>
         {children.map((child) => renderNode(child, 0))}
       </div>
+
+      {/* Context menu */}
+      {ctxMenu ? (
+        <div
+          className="ctx-menu"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+        >
+          {ctxItems.map((item, i) =>
+            "type" in item && item.type === "sep" ? (
+              <div key={i} className="ctx-menu-sep" />
+            ) : (
+              <div key={i} className="ctx-menu-item" onClick={item.fn}>
+                {item.label}
+              </div>
+            ),
+          )}
+        </div>
+      ) : null}
+
+      {/* Input dialog (new file/folder, rename) */}
+      {inputDialog ? (
+        <InputDialog
+          open
+          title={inputDialog.title}
+          label={inputDialog.label}
+          initialValue={inputDialog.initialValue}
+          placeholder={inputDialog.placeholder}
+          confirmLabel="确定"
+          cancelLabel="取消"
+          onConfirm={(value) => {
+            inputDialog.onSubmit(value);
+            setInputDialog(null);
+          }}
+          onCancel={() => setInputDialog(null)}
+        />
+      ) : null}
+
+      {/* Delete confirm dialog */}
+      {deleteConfirm ? (
+        <ConfirmDialog
+          open
+          title="确认删除"
+          message={
+            <>
+              确定要删除 <strong>{deleteConfirm.name}</strong>
+              {deleteConfirm.kind === "dir" ? " 及其所有内容" : ""} 吗？此操作不可撤销。
+            </>
+          }
+          saveLabel="删除"
+          discardLabel=""
+          cancelLabel="取消"
+          onSave={confirmDelete}
+          onCancel={() => setDeleteConfirm(null)}
+        />
+      ) : null}
     </div>
   );
 }

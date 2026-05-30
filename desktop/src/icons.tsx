@@ -51,7 +51,9 @@ export const I = {
   cpu: (p: IconProps) => (<Ic {...p}><rect x="5" y="5" width="14" height="14" rx="2" /><rect x="9" y="9" width="6" height="6" /><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3" /></Ic>),
   coin: (p: IconProps) => (<Ic {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7v10M9 10h4a2 2 0 0 1 0 4H9" /></Ic>),
   file: (p: IconProps) => (<Ic {...p}><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z" /><path d="M14 3v6h6" /></Ic>),
+  filePlus: (p: IconProps) => (<Ic {...p}><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z" /><path d="M14 3v6h6" /><path d="M12 10v6M9 13h6" strokeWidth={2.5} /></Ic>),
   folder: (p: IconProps) => (<Ic {...p}><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></Ic>),
+  folderPlus: (p: IconProps) => (<Ic {...p}><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /><path d="M12 10v6M9 13h6" strokeWidth={2.5} /></Ic>),
   image: (p: IconProps) => (<Ic {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="m3 18 5-5 4 4 3-3 6 6" /></Ic>),
   paperclip: (p: IconProps) => (<Ic {...p}><path d="M21 12 12 21a5 5 0 0 1-7-7L14 5a3 3 0 0 1 4 4l-9 9a1 1 0 0 1-2-2l8-8" /></Ic>),
   mic: (p: IconProps) => (<Ic {...p}><rect x="9" y="3" width="6" height="12" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6" /></Ic>),
@@ -84,6 +86,7 @@ export const I = {
       <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
     </Ic>
   ),
+  save: (p: IconProps) => (<Ic {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" /><path d="M7 3v6h8V3" /><path d="M7 13h10v8H7Z" /></Ic>),
 };
 
 export type IconKey = keyof typeof I;
