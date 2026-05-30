@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { t, useLang } from "../i18n";
 import { I } from "../icons";
 import { ConfirmDialog } from "./confirm-dialog";
-import { InputDialog } from "./input-dialog";
 
 // --------------- types ---------------
 
@@ -87,6 +86,58 @@ function gitStatusClass(kind: string): string {
   }
 }
 
+function InlineEdit({
+  initialValue,
+  depth,
+  isDir,
+  onSubmit,
+  onCancel,
+}: {
+  initialValue: string;
+  depth: number;
+  isDir: boolean;
+  onSubmit: (value: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initialValue);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  return (
+    <div
+      className="file-tree-node file"
+      style={{ paddingLeft: 8 + depth * 14 }}
+    >
+      <span className="ft-spacer" />
+      <span className="ft-icon">
+        {isDir ? <I.folder size={13} /> : <I.file size={13} />}
+      </span>
+      <input
+        ref={inputRef}
+        className="ft-edit-input"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && value.trim()) {
+            onSubmit(value.trim());
+          } else if (e.key === "Escape") {
+            onCancel();
+          }
+        }}
+        onBlur={() => {
+          if (value.trim()) onSubmit(value.trim());
+          else onCancel();
+        }}
+        spellCheck={false}
+      />
+    </div>
+  );
+}
+
 // --------------- FileTree component ---------------
 
 export function FileTree({
@@ -111,18 +162,21 @@ export function FileTree({
     path: string;
     kind: "dir" | "file";
   } | null>(null);
-  const [inputDialog, setInputDialog] = useState<{
-    title: string;
-    label: string;
-    initialValue: string;
-    placeholder: string;
-    onSubmit: (value: string) => Promise<void> | void;
-  } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{
     path: string;
     name: string;
     kind: "dir" | "file";
   } | null>(null);
+
+  // --------------- inline editing ---------------
+
+  const [editingName, setEditingName] = useState<{
+    path: string;
+    kind: "rename" | "newFile" | "newFolder";
+    initialValue: string;
+  } | null>(null);
+  const editingNameRef = useRef(editingName);
+  editingNameRef.current = editingName;
 
   // Close context menu on click outside
   useEffect(() => {
@@ -197,6 +251,43 @@ export function FileTree({
   useEffect(() => {
     void loadTree();
   }, [loadTree]);
+
+  const submitEditing = useCallback(async (value: string) => {
+    const e = editingNameRef.current;
+    if (!e) return;
+    setEditingName(null);
+
+    const normalizedPath = e.path.replace(/\\/g, "/");
+
+    if (e.kind === "newFile") {
+      const fullPath = normalizedPath + "/" + value;
+      try {
+        await invoke("write_text_file", { path: fullPath, content: "" });
+        await loadTree();
+        onOpenFile(fullPath);
+      } catch (err) {
+        console.error("create file failed", err);
+      }
+    } else if (e.kind === "newFolder") {
+      const fullPath = normalizedPath + "/" + value;
+      try {
+        await invoke("create_dir", { path: fullPath });
+        await loadTree();
+      } catch (err) {
+        console.error("create dir failed", err);
+      }
+    } else if (e.kind === "rename") {
+      const parent = parentDir(normalizedPath);
+      const dest = parent + "/" + value;
+      if (normalizedPath === dest) return;
+      try {
+        await invoke("rename_file", { path: e.path, newName: value });
+        await loadTree();
+      } catch (err) {
+        console.error("rename failed", err);
+      }
+    }
+  }, [loadTree, onOpenFile]);
 
   const toggleExpand = useCallback(
     async (nodePath: string) => {
@@ -279,73 +370,34 @@ export function FileTree({
   }, [ctxMenu, onOpenFile]);
 
   // New file
-  const startNewFile = useCallback(() => {
+  const startNewFile = useCallback(async () => {
     const dir = ctxMenu?.kind === "dir" ? ctxMenu.path : null;
     setCtxMenu(null);
     if (!dir && !workspaceDir) return;
-    setInputDialog({
-      title: "新建文件",
-      label: "文件名",
-      initialValue: "",
-      placeholder: "例如: index.ts",
-      async onSubmit(value) {
-        const base = (dir || workspaceDir)!.replace(/\\/g, "/");
-        const fullPath = base + "/" + value;
-        try {
-          await invoke("write_text_file", { path: fullPath, content: "" });
-          await loadTree();
-          onOpenFile(fullPath);
-        } catch (err) {
-          console.error("create file failed", err);
-        }
-      },
-    });
-  }, [ctxMenu, workspaceDir, loadTree, onOpenFile]);
+    const targetDir = (dir || workspaceDir)!.replace(/\\/g, "/");
+    if (dir && !expandedRef.current.has(dir)) {
+      await toggleExpand(dir);
+    }
+    setEditingName({ path: targetDir, kind: "newFile", initialValue: "" });
+  }, [ctxMenu, workspaceDir, toggleExpand]);
 
-  const startNewFolder = useCallback(() => {
+  const startNewFolder = useCallback(async () => {
     const dir = ctxMenu?.kind === "dir" ? ctxMenu.path : null;
     setCtxMenu(null);
     if (!dir && !workspaceDir) return;
-    setInputDialog({
-      title: "新建文件夹",
-      label: "文件夹名",
-      initialValue: "",
-      placeholder: "例如: src",
-      async onSubmit(value) {
-        const base = (dir || workspaceDir)!.replace(/\\/g, "/");
-        const fullPath = base + "/" + value;
-        try {
-          await invoke("create_dir", { path: fullPath });
-          await loadTree();
-        } catch (err) {
-          console.error("create dir failed", err);
-        }
-      },
-    });
-  }, [ctxMenu, workspaceDir, loadTree]);
+    const targetDir = (dir || workspaceDir)!.replace(/\\/g, "/");
+    if (dir && !expandedRef.current.has(dir)) {
+      await toggleExpand(dir);
+    }
+    setEditingName({ path: targetDir, kind: "newFolder", initialValue: "" });
+  }, [ctxMenu, workspaceDir, toggleExpand]);
 
   const startRename = useCallback(() => {
     const p = ctxMenu?.path;
-    const kind = ctxMenu?.kind;
     setCtxMenu(null);
     if (!p) return;
-    const name = p.split(/[\\/]/).pop() ?? "";
-    setInputDialog({
-      title: kind === "dir" ? "重命名文件夹" : "重命名文件",
-      label: "新名称",
-      initialValue: name,
-      placeholder: "",
-      async onSubmit(value) {
-        if (value === name) return;
-        try {
-          await invoke("rename_file", { path: p, newName: value });
-          await loadTree();
-        } catch (err) {
-          console.error("rename failed", err);
-        }
-      },
-    });
-  }, [ctxMenu, loadTree]);
+    setEditingName({ path: p, kind: "rename", initialValue: p.split(/[\\/]/).pop() ?? "" });
+  }, [ctxMenu]);
 
   const handleDelete = useCallback(() => {
     const p = ctxMenu?.path;
@@ -380,42 +432,13 @@ export function FileTree({
 
   const handleHeaderNewFile = useCallback(() => {
     if (!workspaceDir) return;
-    setInputDialog({
-      title: "新建文件",
-      label: "文件名",
-      initialValue: "",
-      placeholder: "例如: index.ts",
-      async onSubmit(value) {
-        const fullPath = workspaceDir.replace(/\\/g, "/") + "/" + value;
-        try {
-          await invoke("write_text_file", { path: fullPath, content: "" });
-          await loadTree();
-          onOpenFile(fullPath);
-        } catch (err) {
-          console.error("create file failed", err);
-        }
-      },
-    });
-  }, [workspaceDir, loadTree, onOpenFile]);
+    setEditingName({ path: workspaceDir.replace(/\\/g, "/"), kind: "newFile", initialValue: "" });
+  }, [workspaceDir]);
 
   const handleHeaderNewFolder = useCallback(() => {
     if (!workspaceDir) return;
-    setInputDialog({
-      title: "新建文件夹",
-      label: "文件夹名",
-      initialValue: "",
-      placeholder: "例如: src",
-      async onSubmit(value) {
-        const fullPath = workspaceDir.replace(/\\/g, "/") + "/" + value;
-        try {
-          await invoke("create_dir", { path: fullPath });
-          await loadTree();
-        } catch (err) {
-          console.error("create dir failed", err);
-        }
-      },
-    });
-  }, [workspaceDir, loadTree]);
+    setEditingName({ path: workspaceDir.replace(/\\/g, "/"), kind: "newFolder", initialValue: "" });
+  }, [workspaceDir]);
 
   const handleCollapseAll = useCallback(() => {
     expandedRef.current = new Set();
@@ -428,6 +451,24 @@ export function FileTree({
   const renderNode = (node: TreeNode, depth: number): React.ReactNode => {
     const gitStatus = gitStatusMap.get(node.path.replace(/\\/g, "/"));
     const isHidden = node.name.startsWith(".") && node.name !== "..";
+
+    // For rename: replace the entire node with an inline edit
+    if (editingName?.path === node.path && editingName?.kind === "rename") {
+      return (
+        <div key={node.path}>
+          <InlineEdit
+            initialValue={editingName.initialValue}
+            depth={depth}
+            isDir={node.kind === "dir"}
+            onSubmit={submitEditing}
+            onCancel={() => setEditingName(null)}
+          />
+          {node.kind === "dir" && node.expanded
+            ? node.children.map((child) => renderNode(child, depth + 1))
+            : null}
+        </div>
+      );
+    }
 
     return (
       <div key={node.path}>
@@ -487,10 +528,21 @@ export function FileTree({
             {node.name}
           </span>
         </div>
-        {/* Children (expanded directories) */}
-        {node.kind === "dir" && node.expanded
-          ? node.children.map((child) => renderNode(child, depth + 1))
-          : null}
+        {/* Children (expanded directories) + inline edit for new items */}
+        {node.kind === "dir" && node.expanded ? (
+          <>
+            {node.children.map((child) => renderNode(child, depth + 1))}
+            {editingName?.path === node.path && (editingName?.kind === "newFile" || editingName?.kind === "newFolder") ? (
+              <InlineEdit
+                initialValue={editingName.initialValue}
+                depth={depth + 1}
+                isDir={editingName.kind === "newFolder"}
+                onSubmit={submitEditing}
+                onCancel={() => setEditingName(null)}
+              />
+            ) : null}
+          </>
+        ) : null}
       </div>
     );
   };
@@ -605,6 +657,15 @@ export function FileTree({
       </div>
       <div className="file-tree-scroll" onContextMenu={handleBgContextMenu}>
         {children.map((child) => renderNode(child, 0))}
+        {editingName?.path === workspaceDir.replace(/\\/g, "/") && (editingName.kind === "newFile" || editingName.kind === "newFolder") ? (
+          <InlineEdit
+            initialValue={editingName.initialValue}
+            depth={0}
+            isDir={editingName.kind === "newFolder"}
+            onSubmit={submitEditing}
+            onCancel={() => setEditingName(null)}
+          />
+        ) : null}
       </div>
 
       {/* Context menu */}
@@ -623,24 +684,6 @@ export function FileTree({
             ),
           )}
         </div>
-      ) : null}
-
-      {/* Input dialog (new file/folder, rename) */}
-      {inputDialog ? (
-        <InputDialog
-          open
-          title={inputDialog.title}
-          label={inputDialog.label}
-          initialValue={inputDialog.initialValue}
-          placeholder={inputDialog.placeholder}
-          confirmLabel="确定"
-          cancelLabel="取消"
-          onConfirm={(value) => {
-            inputDialog.onSubmit(value);
-            setInputDialog(null);
-          }}
-          onCancel={() => setInputDialog(null)}
-        />
       ) : null}
 
       {/* Delete confirm dialog */}

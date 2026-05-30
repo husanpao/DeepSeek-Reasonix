@@ -2233,6 +2233,20 @@ html:not([data-platform="macos"]) .shortcut kbd[data-key="mod"] {
   color: var(--muted-2);
 }
 
+.file-tree-node .ft-edit-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-family: Geist Mono, monospace;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--fg);
+  padding: 0;
+  margin: 0;
+  caret-color: var(--fg);
+}
+
 /* ---- file tree states ---- */
 
 .file-tree-empty {
@@ -2463,13 +2477,13 @@ html:not([data-platform="macos"]) .shortcut kbd[data-key="mod"] {
 /* ---------- UNSAVED CONFIRM DIALOG ---------- */
 
 .confirm-dialog-mask {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: oklch(0% 0 0 / 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: 1000;
 }
 .confirm-dialog {
   background: var(--card);
