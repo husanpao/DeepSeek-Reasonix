@@ -9,6 +9,9 @@ vi.mock("./CommandPalette", () => ({
 vi.mock("./Markdown", () => ({
   WorkspaceProvider: ({ children }: { children?: unknown }) => children ?? null,
 }));
+vi.mock("./ui/file-content-viewer", () => ({
+  FileContentViewer: () => null,
+}));
 vi.mock("./theme", () => ({
   FONT_FAMILY: "sans-serif",
   FONT_FAMILY_STACK: "sans-serif",
