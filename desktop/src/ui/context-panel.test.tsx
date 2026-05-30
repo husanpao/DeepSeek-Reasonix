@@ -33,7 +33,7 @@ const settings: Settings = {
   version: "0.0.0",
 };
 
-function renderPanel() {
+function renderPanel(overrides?: Partial<React.ComponentProps<typeof ContextPanel>>) {
   return render(
     <ContextPanel
       settings={settings}
@@ -44,6 +44,7 @@ function renderPanel() {
       memory={[]}
       memoryDetail={null}
       onReadMemory={() => {}}
+      {...overrides}
     />,
   );
 }
@@ -57,7 +58,7 @@ describe("ContextPanel files", () => {
   afterEach(cleanup);
 
   it("keeps each tracked file's full path visible", () => {
-    const { container } = renderPanel();
+    const { container } = renderPanel({ activeTab: "files" });
 
     const fileRow = container.querySelector('[data-kind="file"]');
 
@@ -66,7 +67,7 @@ describe("ContextPanel files", () => {
   });
 
   it("opens a tracked file from the file row action", async () => {
-    renderPanel();
+    renderPanel({ activeTab: "files" });
 
     fireEvent.click(screen.getByRole("button", { name: "Open file: src/new-file.ts" }));
 
