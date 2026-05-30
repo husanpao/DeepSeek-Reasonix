@@ -1485,7 +1485,7 @@ function TabRuntime({
   );
   const [jobsOpen, setJobsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
-  const [contextPanelTab, setContextPanelTab] = useState<ContextPanelTab>("files");
+  const [contextPanelTab, setContextPanelTab] = useState<ContextPanelTab>("chat");
   const [contextPanelTabNonce, setContextPanelTabNonce] = useState(0);
   const [fileViewPath, setFileViewPath] = useState<string | null>(null);
   const previousApprovalSnapshotRef = useRef<ApprovalSnapshot>({

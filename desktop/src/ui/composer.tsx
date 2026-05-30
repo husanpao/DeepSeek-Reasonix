@@ -879,8 +879,13 @@ function Popup({
   onHover: (i: number, item: SlashCmd | MentionItem) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
+  const mouseNavRef = useRef(false);
 
   useEffect(() => {
+    if (mouseNavRef.current) {
+      mouseNavRef.current = false;
+      return;
+    }
     requestAnimationFrame(() => {
       const el = listRef.current?.querySelector<HTMLElement>(`[data-active="true"]`);
       el?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
@@ -890,7 +895,12 @@ function Popup({
   return (
     <div
       className={kind === "at" ? "popup at-popup" : "popup"}
-      onMouseDown={(e) => e.preventDefault()}
+      onMouseDown={(e) => {
+        // keep focus on textarea
+        if (!(e.target as HTMLElement).closest(".popup-item")) {
+          e.preventDefault();
+        }
+      }}
     >
       <div className="ph">
         <span className="tok">{kind === "slash" ? "/" : "@"}</span>
@@ -923,7 +933,10 @@ function Popup({
             className="popup-item"
             data-active={i === activeIdx}
             onClick={() => onPick(i)}
-            onMouseEnter={() => onHover(i, it)}
+            onMouseEnter={() => {
+              mouseNavRef.current = true;
+              onHover(i, it);
+            }}
           >
             <span className="ico">
               {kind === "slash"

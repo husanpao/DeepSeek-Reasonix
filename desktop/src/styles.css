@@ -3672,6 +3672,11 @@ html:not([data-platform="macos"]) .shortcut kbd[data-key="mod"] {
   color: var(--fg);
   background: var(--panel-2);
 }
+
+/* Prevent hover flicker on approval foot buttons */
+.approval .ap-foot .btn {
+  transition: none;
+}
 .btn kbd {
   font-family: inherit;
   font-size: 14px;
@@ -6730,6 +6735,7 @@ html:not([data-platform="macos"]) .cmdk-row .kb .shortcut kbd[data-key="mod"] {
   border-radius: 10px;
   overflow: hidden;
   position: relative;
+  will-change: transform;
 }
 .approval::before {
   content: "";
