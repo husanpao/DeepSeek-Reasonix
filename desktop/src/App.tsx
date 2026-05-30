@@ -70,6 +70,7 @@ import { SettingsModal, type PageId as SettingsPageId } from "./ui/settings";
 import { JumpBar } from "./ui/jump-bar";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 
+import { FileContentViewer } from "./ui/file-content-viewer";
 import { Sidebar } from "./ui/sidebar";
 import { Shortcut, localizeShortcutText, shortcutText } from "./ui/shortcut";
 import { Splash, shouldShowSplash } from "./ui/splash";
@@ -1486,6 +1487,7 @@ function TabRuntime({
   const [aboutOpen, setAboutOpen] = useState(false);
   const [contextPanelTab, setContextPanelTab] = useState<ContextPanelTab>("files");
   const [contextPanelTabNonce, setContextPanelTabNonce] = useState(0);
+  const [fileViewPath, setFileViewPath] = useState<string | null>(null);
   const previousApprovalSnapshotRef = useRef<ApprovalSnapshot>({
     confirms: [],
     pathAccess: [],
@@ -2573,8 +2575,18 @@ function TabRuntime({
           onOpenRules={() => openSettingsAt("rules")}
           onOpenCommands={() => palette.setOpen(true)}
           onOpenAbout={() => setAboutOpen(true)}
+          onOpenFile={async (path) => {
+            const editor = state.settings?.editor;
+            if (editor?.trim()) {
+              await invoke("open_in_editor", { command: editor, path, line: null });
+            }
+            setFileViewPath(path);
+          }}
+          onCopyMd={conversationCopy}
+          onExportMd={exportConversation}
+          hasMessages={state.messages.length > 0}
         />
-
+        
         {!sideCollapsed ? (
           <div
             className="resize-handle"
@@ -2583,203 +2595,38 @@ function TabRuntime({
             onMouseDown={onSideResizeDown}
           />
         ) : null}
-
+        
         <main className="main" style={{ position: "relative" }}>
-          <JumpBar messages={state.messages} threadEl={threadRef.current} onScrollToTurn={(turn) => {
-            const idx = state.messages.findIndex((m) => (m.kind === "user" || m.kind === "assistant") && m.turn === turn);
-            if (idx >= 0) virtuosoRef.current?.scrollToIndex(idx);
-          }} />
-          {state.needsSetup ? (
-            <NeedsSetupView
-              workspaceDir={state.settings?.workspaceDir}
-              onPickWorkspace={pickWorkspace}
-              onSubmit={(key) => sendRpc({ cmd: "setup_save_key", key })}
+          {fileViewPath ? (
+            <FileContentViewer
+              filePath={fileViewPath}
+              onClose={() => setFileViewPath(null)}
+              onOpenInEditor={async (path) => {
+                const editor = state.settings?.editor;
+                if (editor?.trim()) {
+                  await invoke("open_in_editor", { command: editor, path, line: null });
+                }
+              }}
             />
           ) : (
-            <>
-              <MainHead
-                session={session}
-                model={state.settings?.model}
-                workspaceDir={state.settings?.workspaceDir}
-                busy={state.busy}
-                hasMessages={state.messages.length > 0}
-                onAbort={abort}
-                onNewChat={newChat}
-                onCopy={conversationCopy}
-                onExport={exportConversation}
-                onOpenWorkdir={(anchor) => {
-                  setWdAnchor(anchor);
-                  setWdOpen(true);
-                }}
-              />
-              <div className="thread" ref={threadRef}>
-                {state.messages.length === 0 ? (
-                  <div className="thread-inner thread-inner--standalone">
-                    <EmptyState
-                      onPick={(text) => {
-                        const trimmed = text.trim();
-                        if (trimmed.startsWith("/")) {
-                          const cmd = trimmed.split(/\s+/)[0] ?? "";
-                          const match = slashCommands.find((s) => s.cmd === cmd);
-                          if (match) { match.run(); return; }
-                        }
-                        send(text);
-                      }}
-                      workspaceDir={state.settings?.workspaceDir}
-                    />
-                  </div>
-                ) : (
-                  <Virtuoso
-                    ref={virtuosoRef}
-                    style={{ height: "90%" }}
-                    className="virtuoso-scroll"
-                    totalCount={messageItems.length}
-                    followOutput={"auto"}
-                    initialTopMostItemIndex={messageItems.length > 0 ? messageItems.length - 1 : undefined}
-                    scrollerRef={(ref) => { virtScrollerRef.current = ref as HTMLDivElement | null; }}
-                    atBottomStateChange={(atBottom) => { atBottomRef.current = atBottom; setShowJumpButton(!atBottom); }}
-                    components={{
-                      Header: state.activePlan ? () => (
-                        <div className="thread-inner">
-                          <PlanBanner
-                            plan={state.activePlan!}
-                            onDismiss={state.busy ? undefined : () => dispatch({ t: "dismiss_plan" })}
-                          />
-                          <ActivePlanTaskCard plan={state.activePlan!} />
-                        </div>
-                      ) : undefined,
-                      Footer: () => (
-                        <div className="thread-inner">
-                          {state.pendingPlans.map((p) => <PlanApprovalCard key={`pp-${p.id}`} p={p} onApprove={() => resolvePlan(p.id, { type: "approve" })} onRefine={() => resolvePlan(p.id, { type: "refine" })} onCancel={() => resolvePlan(p.id, { type: "cancel" })} />)}
-                          {state.pendingCheckpoints.map((c) => <CheckpointApprovalCard key={`cp-${c.id}`} c={c} onContinue={() => resolveCheckpoint(c.id, { type: "continue" })} onRevise={() => resolveCheckpoint(c.id, { type: "revise" })} onStop={() => resolveCheckpoint(c.id, { type: "stop" })} />)}
-                          {state.pendingRevisions.map((r) => <RevisionApprovalCard key={`rv-${r.id}`} r={r} onAccept={() => resolveRevision(r.id, { type: "accepted" })} onReject={() => resolveRevision(r.id, { type: "rejected" })} />)}
-                          {state.pendingConfirms.map((c) => <ConfirmApprovalCard key={`cc-${c.id}`} prompt={c.prompt} onAllow={() => resolveConfirm(c.id, { type: "run_once" })} onAlwaysAllow={(prefix) => resolveConfirm(c.id, { type: "always_allow", prefix })} onDeny={() => resolveConfirm(c.id, { type: "deny" })} />)}
-                          {state.pendingPathAccess.map((p) => <PathAccessApprovalCard key={`pa-${p.id}`} prompt={p.prompt} onAllow={() => resolvePathAccess(p.id, { type: "run_once" })} onAlwaysAllow={(prefix) => resolvePathAccess(p.id, { type: "always_allow", prefix })} onDeny={() => resolvePathAccess(p.id, { type: "deny" })} />)}
-                          {state.pendingChoices.map((c) => <ChoiceApprovalCard key={`ch-${c.id}`} c={c} onPick={(optionId) => resolveChoice(c.id, { type: "pick", optionId })} onCancel={() => resolveChoice(c.id, { type: "cancel" })} />)}
-                          {!state.ready ? <div style={{ padding: 12, color: "var(--muted)", fontFamily: "Geist Mono, monospace", fontSize: 11 }}>{t("app.connecting")}</div> : null}
-                        </div>
-                      ),
-                    }}
-                    itemContent={(index) => {
-                      const m = state.messages[index]!;
-                      if (m.kind === "user") {
-                        return (
-                          <div className="thread-inner" data-turn={m.turn}>
-                            <TurnDivider label={`turn ${m.turn}`} />
-                            <UserMsg text={m.text} skill={m.skill} onEdit={onEditUserMsg} />
-                          </div>
-                        );
-                      }
-                      if (m.kind === "assistant") {
-                        const stats = !m.pending ? countFileStats(m.segments) : null;
-                        return (
-                          <div className="thread-inner">
-                            <AssistantMsg
-                              segments={m.segments}
-                              pending={m.pending}
-                              model={state.model}
-                              onApproveConfirm={onApproveConfirm}
-                              onRejectConfirm={onRejectConfirm}
-                              onAlwaysAllowConfirm={onAlwaysAllowConfirm}
-                              pendingConfirms={state.pendingConfirms}
-                            />
-                            {stats ? <DiffStats stats={stats} /> : null}
-                          </div>
-                        );
-                      }
-                      if (m.kind === "error") {
-                        const toneVar = m.recoverable ? "var(--tone-warn)" : "var(--tone-err)";
-                        const bgVar = m.recoverable ? "var(--warn-soft, var(--danger-soft))" : "var(--danger-soft)";
-                        const labelKey = m.recoverable ? "app.warningLabel" : "app.errorLabel";
-                        return (
-                          <div key={m.id} className="warn-card" style={{ borderColor: toneVar, background: bgVar, position: "relative" }}>
-                            <span className="ico" style={{ color: toneVar }}><I.warning size={16} /></span>
-                            <div style={{ flex: 1 }}>
-                              <div className="tt">{t(labelKey)}</div>
-                              <div className="ds">{m.message}</div>
-                            </div>
-                            <button type="button" className="warn-card-dismiss" title={t("app.dismissError")}
-                              onClick={() => dispatch({ t: "dismiss_error", id: m.id })}
-                              style={{ background: "transparent", border: "none", color: toneVar, cursor: "pointer", padding: "4px", alignSelf: "flex-start" }}>
-                              <I.x size={14} />
-                            </button>
-                          </div>
-                        );
-                      }
-                      if (m.kind === "warning") {
-                        if (state.settings?.showSystemEvents === false) return null;
-                        return (
-                          <div key={m.id} className="sys-event-row" title={m.text}>
-                            <span className="line" />
-                            <span className="label">{m.text}</span>
-                            <span className="line" />
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                )}
-                {showJumpButton ? (
-                  <button
-                    className="thread-jump-bottom"
-                    onClick={() => { atBottomRef.current = true; setShowJumpButton(false); scrollToBottom(); }}
-                    title={t("app.jumpToBottom") ?? "Jump to bottom"}
-                    aria-label={t("app.jumpToBottom") ?? "Jump to bottom"}
-                  >
-                    <I.chev size={16} />
-                  </button>
-                ) : null}
+            <div className="main-welcome">
+              <div className="main-welcome-icon"><I.folder size={32} /></div>
+              <div className="main-welcome-text">{t("app.selectFileToView")}</div>
+              <div className="main-welcome-hints">
+                <span>
+                  <Shortcut keys={["/"]} /> {t("composer.commands")} &nbsp;·&nbsp;{" "}
+                  <Shortcut keys={["@"]} /> {t("composer.mentionFiles")}
+                  &nbsp;·&nbsp; <Shortcut keys={["mod", "K"]} /> {t("composer.commandPalette")}
+                </span>
+                <span>
+                  <Shortcut keys={["enter"]} /> {t("composer.send")} &nbsp;{" "}
+                  <Shortcut keys={["shift", "enter"]} /> {t("composer.newline")}
+                </span>
               </div>
-
-              <Composer
-                draft={draft}
-                setDraft={setDraft}
-                onDraftUserEdit={resetPromptHistoryNav}
-                promptHistoryBrowsing={promptHistoryNav.mode === "browsing"}
-                onPromptHistoryNavigate={(direction) =>
-                  requestPromptHistoryNavigation(direction, draftRef.current)
-                }
-                onSend={() => send()}
-                onAbort={abort}
-                disabled={!state.ready}
-                busy={state.busy}
-                busyLabel={
-                  state.busy
-                    ? state.activeSkill
-                      ? `Skill · ${state.activeSkill.name}`
-                      : "Reasoning"
-                    : undefined
-                }
-                busyElapsedMs={elapsed}
-                textareaRef={composerRef}
-                modelLabel={state.settings?.model ?? "deepseek-v4-flash"}
-                reasoningEffort={state.settings?.reasoningEffort ?? "high"}
-                onModelChange={(model) => {
-                  applySettingsPatch({ model });
-                  flashToast(t("app.toast.modelSwitched", { model }));
-                }}
-                onEffortChange={applyReasoningEffort}
-                editMode={state.settings?.editMode ?? "review"}
-                onEditModeChange={applyEditMode}
-                workspaceDir={state.settings?.workspaceDir}
-                slashCommands={slashCommands}
-                onMentionQuery={queryMentions}
-                onMentionPreview={previewMention}
-                onMentionPicked={markMentionPicked}
-                mentionResults={state.mentionResults}
-                queuedSends={state.queuedSends}
-                onQueueWhileBusy={(text) => {
-                  resetPromptHistoryNav();
-                  dispatch({ t: "enqueue_send", text });
-                  setDraft("");
-                }}
-                onDequeueSend={(index) => dispatch({ t: "dequeue_send", index })}
-              />
-            </>
+            </div>
           )}
         </main>
-
+        
         {!ctxCollapsed ? (
           <div
             className="resize-handle"
@@ -2798,6 +2645,199 @@ function TabRuntime({
           memoryDetail={state.memoryDetail}
           activeTab={contextPanelTab}
           activeTabNonce={contextPanelTabNonce}
+          chatContent={
+            <>
+              <JumpBar messages={state.messages} threadEl={threadRef.current} onScrollToTurn={(turn) => {
+                const idx = state.messages.findIndex((m) => (m.kind === "user" || m.kind === "assistant") && m.turn === turn);
+                if (idx >= 0) virtuosoRef.current?.scrollToIndex(idx);
+              }} />
+              {state.needsSetup ? (
+                <NeedsSetupView
+                  workspaceDir={state.settings?.workspaceDir}
+                  onPickWorkspace={pickWorkspace}
+                  onSubmit={(key) => sendRpc({ cmd: "setup_save_key", key })}
+                />
+              ) : (
+                <>
+                  <div className="thread" ref={threadRef}>
+                    {state.messages.length === 0 ? (
+                      <div className="thread-inner thread-inner--standalone">
+                        <EmptyState
+                          onPick={(text) => {
+                            const trimmed = text.trim();
+                            if (trimmed.startsWith("/")) {
+                              const cmd = trimmed.split(/\s+/)[0] ?? "";
+                              const match = slashCommands.find((s) => s.cmd === cmd);
+                              if (match) { match.run(); return; }
+                            }
+                            send(text);
+                          }}
+                          workspaceDir={state.settings?.workspaceDir}
+                        />
+                      </div>
+                    ) : (
+                      <Virtuoso
+                        ref={virtuosoRef}
+                        style={{ height: "90%" }}
+                        className="virtuoso-scroll"
+                        totalCount={messageItems.length}
+                        followOutput={"auto"}
+                        initialTopMostItemIndex={messageItems.length > 0 ? messageItems.length - 1 : undefined}
+                        scrollerRef={(ref) => { virtScrollerRef.current = ref as HTMLDivElement | null; }}
+                        atBottomStateChange={(atBottom) => { atBottomRef.current = atBottom; setShowJumpButton(!atBottom); }}
+                        components={{
+                          Header: state.activePlan ? () => (
+                            <div className="thread-inner">
+                              <PlanBanner
+                                plan={state.activePlan!}
+                                onDismiss={state.busy ? undefined : () => dispatch({ t: "dismiss_plan" })}
+                              />
+                              <ActivePlanTaskCard plan={state.activePlan!} />
+                            </div>
+                          ) : undefined,
+                          Footer: () => (
+                            <div className="thread-inner">
+                              {state.pendingPlans.map((p) => <PlanApprovalCard key={`pp-${p.id}`} p={p} onApprove={() => resolvePlan(p.id, { type: "approve" })} onRefine={() => resolvePlan(p.id, { type: "refine" })} onCancel={() => resolvePlan(p.id, { type: "cancel" })} />)}
+                              {state.pendingCheckpoints.map((c) => <CheckpointApprovalCard key={`cp-${c.id}`} c={c} onContinue={() => resolveCheckpoint(c.id, { type: "continue" })} onRevise={() => resolveCheckpoint(c.id, { type: "revise" })} onStop={() => resolveCheckpoint(c.id, { type: "stop" })} />)}
+                              {state.pendingRevisions.map((r) => <RevisionApprovalCard key={`rv-${r.id}`} r={r} onAccept={() => resolveRevision(r.id, { type: "accepted" })} onReject={() => resolveRevision(r.id, { type: "rejected" })} />)}
+                              {state.pendingConfirms.map((c) => <ConfirmApprovalCard key={`cc-${c.id}`} prompt={c.prompt} onAllow={() => resolveConfirm(c.id, { type: "run_once" })} onAlwaysAllow={(prefix) => resolveConfirm(c.id, { type: "always_allow", prefix })} onDeny={() => resolveConfirm(c.id, { type: "deny" })} />)}
+                              {state.pendingPathAccess.map((p) => <PathAccessApprovalCard key={`pa-${p.id}`} prompt={p.prompt} onAllow={() => resolvePathAccess(p.id, { type: "run_once" })} onAlwaysAllow={(prefix) => resolvePathAccess(p.id, { type: "always_allow", prefix })} onDeny={() => resolvePathAccess(p.id, { type: "deny" })} />)}
+                              {state.pendingChoices.map((c) => <ChoiceApprovalCard key={`ch-${c.id}`} c={c} onPick={(optionId) => resolveChoice(c.id, { type: "pick", optionId })} onCancel={() => resolveChoice(c.id, { type: "cancel" })} />)}
+                              {!state.ready ? <div style={{ padding: 12, color: "var(--muted)", fontFamily: "Geist Mono, monospace", fontSize: 11 }}>{t("app.connecting")}</div> : null}
+                            </div>
+                          ),
+                        }}
+                        itemContent={(index) => {
+                          const m = state.messages[index]!;
+                          if (m.kind === "user") {
+                            return (
+                              <div className="thread-inner" data-turn={m.turn}>
+                                <TurnDivider label={`turn ${m.turn}`} />
+                                <UserMsg text={m.text} skill={m.skill} onEdit={onEditUserMsg} />
+                              </div>
+                            );
+                          }
+                          if (m.kind === "assistant") {
+                            const stats = !m.pending ? countFileStats(m.segments) : null;
+                            return (
+                              <div className="thread-inner">
+                                <AssistantMsg
+                                  segments={m.segments}
+                                  pending={m.pending}
+                                  model={state.model}
+                                  onApproveConfirm={onApproveConfirm}
+                                  onRejectConfirm={onRejectConfirm}
+                                  onAlwaysAllowConfirm={onAlwaysAllowConfirm}
+                                  pendingConfirms={state.pendingConfirms}
+                                />
+                                {stats ? <DiffStats stats={stats} /> : null}
+                              </div>
+                            );
+                          }
+                          if (m.kind === "error") {
+                            const toneVar = m.recoverable ? "var(--tone-warn)" : "var(--tone-err)";
+                            const bgVar = m.recoverable ? "var(--warn-soft, var(--danger-soft))" : "var(--danger-soft)";
+                            const labelKey = m.recoverable ? "app.warningLabel" : "app.errorLabel";
+                            return (
+                              <div key={m.id} className="warn-card" style={{ borderColor: toneVar, background: bgVar, position: "relative" }}>
+                                <span className="ico" style={{ color: toneVar }}><I.warning size={16} /></span>
+                                <div style={{ flex: 1 }}>
+                                  <div className="tt">{t(labelKey)}</div>
+                                  <div className="ds">{m.message}</div>
+                                </div>
+                                <button type="button" className="warn-card-dismiss" title={t("app.dismissError")}
+                                  onClick={() => dispatch({ t: "dismiss_error", id: m.id })}
+                                  style={{ background: "transparent", border: "none", color: toneVar, cursor: "pointer", padding: "4px", alignSelf: "flex-start" }}>
+                                  <I.x size={14} />
+                                </button>
+                              </div>
+                            );
+                          }
+                          if (m.kind === "warning") {
+                            if (state.settings?.showSystemEvents === false) return null;
+                            return (
+                              <div key={m.id} className="sys-event-row" title={m.text}>
+                                <span className="line" />
+                                <span className="label">{m.text}</span>
+                                <span className="line" />
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                    )}
+                    {showJumpButton ? (
+                      <button
+                        className="thread-jump-bottom"
+                        onClick={() => { atBottomRef.current = true; setShowJumpButton(false); scrollToBottom(); }}
+                        title={t("app.jumpToBottom") ?? "Jump to bottom"}
+                        aria-label={t("app.jumpToBottom") ?? "Jump to bottom"}
+                      >
+                        <I.chev size={16} />
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <Composer
+                    draft={draft}
+                    setDraft={setDraft}
+                    onDraftUserEdit={resetPromptHistoryNav}
+                    promptHistoryBrowsing={promptHistoryNav.mode === "browsing"}
+                    onPromptHistoryNavigate={(direction) =>
+                      requestPromptHistoryNavigation(direction, draftRef.current)
+                    }
+                    onSend={() => send()}
+                    onAbort={abort}
+                    disabled={!state.ready}
+                    busy={state.busy}
+                    busyLabel={
+                      state.busy
+                        ? state.activeSkill
+                          ? `Skill \u00b7 ${state.activeSkill.name}`
+                          : "Reasoning"
+                        : undefined
+                    }
+                    busyElapsedMs={elapsed}
+                    textareaRef={composerRef}
+                    modelLabel={state.settings?.model ?? "deepseek-v4-flash"}
+                    reasoningEffort={state.settings?.reasoningEffort ?? "high"}
+                    onModelChange={(model) => {
+                      applySettingsPatch({ model });
+                      flashToast(t("app.toast.modelSwitched", { model }));
+                    }}
+                    onEffortChange={applyReasoningEffort}
+                    editMode={state.settings?.editMode ?? "review"}
+                    onEditModeChange={applyEditMode}
+                    workspaceDir={state.settings?.workspaceDir}
+                    slashCommands={slashCommands}
+                    onMentionQuery={queryMentions}
+                    onMentionPreview={previewMention}
+                    onMentionPicked={markMentionPicked}
+                    mentionResults={state.mentionResults}
+                    queuedSends={state.queuedSends}
+                    onQueueWhileBusy={(text) => {
+                      resetPromptHistoryNav();
+                      dispatch({ t: "enqueue_send", text });
+                      setDraft("");
+                    }}
+                    onDequeueSend={(index) => dispatch({ t: "dequeue_send", index })}
+                    actions={
+                      <>
+                        {state.busy ? (
+                          <button type="button" className="hint-btn hint-abort"
+                            onClick={abort}
+                            title={t("app.header.abort")}>
+                            <I.stop size={12} />
+                          </button>
+                        ) : null}
+                      </>
+                    }
+                  />
+                </>
+              )}
+            </>
+          }
           onReadMemory={(path) => sendRpc({ cmd: "memory_read", path })}
           onOpenMcpSettings={() => openSettingsAt("mcp")}
           onEditMcpSpec={openMcpEditor}
@@ -3230,95 +3270,6 @@ function TabBar({
         <I.plus size={12} />
         <span style={{ fontSize: 11, marginLeft: 4 }}>{t("app.tab.newTab")}</span>
       </div>
-    </div>
-  );
-}
-
-function MainHead({
-  session,
-  model,
-  workspaceDir,
-  busy,
-  hasMessages,
-  onAbort,
-  onNewChat,
-  onCopy,
-  onExport,
-  onOpenWorkdir,
-}: {
-  session: string;
-  model?: string;
-  workspaceDir?: string;
-  busy: boolean;
-  hasMessages: boolean;
-  onAbort: () => void;
-  onNewChat: () => void;
-  onCopy: () => void;
-  onExport: () => void;
-  onOpenWorkdir: (anchor: { top?: number; bottom?: number; left: number }) => void;
-}) {
-  useLang();
-  const wsLabel = workspaceDir
-    ? workspaceDir.split(/[\\/]/).pop() || "workspace"
-    : t("app.header.noWorkspace");
-  return (
-    <div className="main-head">
-      <div className="title-wrap">
-        <h1>
-          <span className="editable">{session}</span>
-          {busy ? (
-            <span className="pill" style={{ color: "var(--accent)" }}>
-              <span className="dot" />
-              <span className="shimmer">{t("app.header.running")}</span>
-            </span>
-          ) : null}
-        </h1>
-        <div className="sub">
-          <span
-            className="ws-crumb"
-            onClick={(e) => {
-              const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-              onOpenWorkdir({ top: r.bottom + 6, left: r.left });
-            }}
-            style={{ cursor: "pointer" }}
-            title={workspaceDir ?? t("app.header.clickToSelect")}
-          >
-            <I.folder size={10} /> {wsLabel}
-          </span>
-          {model ? (
-            <span className="pill">
-              <I.brain size={10} /> {model}
-            </span>
-          ) : null}
-        </div>
-      </div>
-      <span className="grow" />
-      <button
-        type="button"
-        className="h-btn"
-        onClick={onCopy}
-        disabled={!hasMessages}
-        title={t("app.header.copyMd")}
-      >
-        <I.copy size={12} /> {t("app.header.copy")}
-      </button>
-      <button
-        type="button"
-        className="h-btn"
-        onClick={onExport}
-        disabled={!hasMessages}
-        title={t("app.header.exportMd")}
-      >
-        <I.download size={12} /> {t("app.header.export")}
-      </button>
-      <button type="button" className="h-btn" onClick={onNewChat}>
-        <I.plus size={12} /> {t("app.header.newChat")}
-      </button>
-      {busy ? (
-        <button type="button" className="h-btn primary" onClick={onAbort}>
-          <I.stop size={12} /> {t("app.header.abort")}
-        </button>
-      ) : null}
     </div>
   );
 }

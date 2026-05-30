@@ -5,6 +5,7 @@ import { t, useLang } from "../i18n";
 import { I } from "../icons";
 import type { ExternalSessionApp, ExternalSessionSource } from "../protocol";
 import { Shortcut } from "./shortcut";
+import { FileTree, SidebarTabs } from "./file-tree";
 
 const RENAME_MAX_CHARS = 200;
 
@@ -65,6 +66,10 @@ export function Sidebar({
   onOpenRules,
   onOpenCommands,
   onOpenAbout,
+  onOpenFile,
+  onCopyMd,
+  onExportMd,
+  hasMessages,
 }: {
   sessions: SessionInfo[];
   importSources: ExternalSessionApp[];
@@ -82,8 +87,13 @@ export function Sidebar({
   onOpenRules: () => void;
   onOpenCommands: () => void;
   onOpenAbout: () => void;
+  onOpenFile: (path: string) => void;
+  onCopyMd?: () => void;
+  onExportMd?: () => void;
+  hasMessages?: boolean;
 }) {
   useLang();
+  const [sidebarTab, setSidebarTab] = useState<"sessions" | "files">("sessions");
   const [query, setQuery] = useState("");
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
@@ -122,101 +132,106 @@ export function Sidebar({
 
   return (
     <aside className="sidebar">
-      <div className="side-head">
-        <button type="button" className="new-btn" onClick={onNewChat}>
-          <I.plus size={14} />
-          <span>{t("sidebarPanel.newChat")}</span>
-          <Shortcut keys={["mod", "N"]} />
-        </button>
-        <button
-          type="button"
-          className="icon-btn"
-          title={t("sidebarPanel.importSessions")}
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            onRefreshImportSources();
-            setPendingImport({ x: rect.right, y: rect.bottom });
-          }}
-        >
-          <I.upload size={14} />
-        </button>
-        <button
-          type="button"
-          className="icon-btn"
-          title={t("sidebarPanel.commandPalette")}
-          onClick={onOpenCommands}
-        >
-          <I.history size={14} />
-        </button>
-      </div>
+      {/* Tab bar: Chats / Files */}
+      <SidebarTabs activeTab={sidebarTab} onTabChange={setSidebarTab} />
 
-      <div className="side-workspace">
-        <button
-          type="button"
-          className="workspace-btn"
-          title={
-            workspaceDir
-              ? t("sidebarPanel.switchWorkspace", { workspace: workspaceDir })
-              : t("sidebarPanel.pickWorkspace")
-          }
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            onOpenWorkdir({ top: rect.bottom + 6, left: rect.left });
-          }}
-        >
-          <span className="ico">
-            <I.folder size={13} />
-          </span>
-          <span className="body">
-            <span className="label">{t("sidebarPanel.workspace")}</span>
-            <span className="name">{workspaceLabel}</span>
-          </span>
-          <I.chev size={12} />
-        </button>
-      </div>
-
-      <div className="search-row">
-        <div className="input">
-          <I.search size={13} />
-          <input
-            placeholder={t("sidebarPanel.searchSessions")}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <Shortcut keys={["mod", "K"]} />
-        </div>
-      </div>
-
-      <div className="session-list">
-        <div className="side-section">
-          <div className="label">
-            <span>{t("sidebarPanel.recent")}</span>
-            <span className="count">{filtered.length}</span>
+      {sidebarTab === "sessions" ? (
+        <>
+          <div className="side-head">
+            <button type="button" className="new-btn" onClick={onNewChat}>
+              <I.plus size={14} />
+              <span>{t("sidebarPanel.newChat")}</span>
+              <Shortcut keys={["mod", "N"]} />
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              title={t("sidebarPanel.importSessions")}
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                onRefreshImportSources();
+                setPendingImport({ x: rect.right, y: rect.bottom });
+              }}
+            >
+              <I.upload size={14} />
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              title={t("sidebarPanel.commandPalette")}
+              onClick={onOpenCommands}
+            >
+              <I.history size={14} />
+            </button>
           </div>
-          {sessions.length === 0 ? (
-            <div
-              style={{
-                padding: "12px 8px",
-                fontSize: 11,
-                color: "var(--muted-2)",
-                fontFamily: "Geist Mono, monospace",
+
+          <div className="side-workspace">
+            <button
+              type="button"
+              className="workspace-btn"
+              title={
+                workspaceDir
+                  ? t("sidebarPanel.switchWorkspace", { workspace: workspaceDir })
+                  : t("sidebarPanel.pickWorkspace")
+              }
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                onOpenWorkdir({ top: rect.bottom + 6, left: rect.left });
               }}
             >
-              {t("sidebarPanel.noSessions")}
+              <span className="ico">
+                <I.folder size={13} />
+              </span>
+              <span className="body">
+                <span className="label">{t("sidebarPanel.workspace")}</span>
+                <span className="name">{workspaceLabel}</span>
+              </span>
+              <I.chev size={12} />
+            </button>
+          </div>
+
+          <div className="search-row">
+            <div className="input">
+              <I.search size={13} />
+              <input
+                placeholder={t("sidebarPanel.searchSessions")}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              <Shortcut keys={["mod", "K"]} />
             </div>
-          ) : filtered.length === 0 ? (
-            <div
-              style={{
-                padding: "12px 8px",
-                fontSize: 11,
-                color: "var(--muted-2)",
-                fontFamily: "Geist Mono, monospace",
-              }}
-            >
-              {t("sidebarPanel.noMatches")}
-            </div>
-          ) : null}
-          {filtered.map((s) => {
+          </div>
+
+          <div className="session-list">
+            <div className="side-section">
+              <div className="label">
+                <span>{t("sidebarPanel.recent")}</span>
+                <span className="count">{filtered.length}</span>
+              </div>
+              {sessions.length === 0 ? (
+                <div
+                  style={{
+                    padding: "12px 8px",
+                    fontSize: 11,
+                    color: "var(--muted-2)",
+                    fontFamily: "Geist Mono, monospace",
+                  }}
+                >
+                  {t("sidebarPanel.noSessions")}
+                </div>
+              ) : filtered.length === 0 ? (
+                <div
+                  style={{
+                    padding: "12px 8px",
+                    fontSize: 11,
+                    color: "var(--muted-2)",
+                    fontFamily: "Geist Mono, monospace",
+                  }}
+                >
+                  {t("sidebarPanel.noMatches")}
+                </div>
+              ) : null}
+              {filtered.map((s) => {
             const active = s.name === activeName;
             const mtime = Date.parse(s.mtime);
             const updated = Number.isFinite(mtime) ? relative(Date.now() - mtime) : s.mtime;
@@ -292,10 +307,28 @@ export function Sidebar({
                   </span>
                 </div>
                 {editing ? null : (
-                  <>
+                  <span className="session-actions">
                     <button
                       type="button"
-                      className="rename-btn"
+                      className="s-act"
+                      title={t("app.header.copyMd")}
+                      disabled={!hasMessages}
+                      onClick={(e) => { e.stopPropagation(); onCopyMd?.(); }}
+                    >
+                      <I.copy size={11} />
+                    </button>
+                    <button
+                      type="button"
+                      className="s-act"
+                      title={t("app.header.exportMd")}
+                      disabled={!hasMessages}
+                      onClick={(e) => { e.stopPropagation(); onExportMd?.(); }}
+                    >
+                      <I.download size={11} />
+                    </button>
+                    <button
+                      type="button"
+                      className="s-act"
                       title={t("sidebarPanel.renameSession")}
                       aria-label={t("sidebarPanel.renameSession")}
                       onClick={(e) => {
@@ -311,7 +344,7 @@ export function Sidebar({
                     </button>
                     <button
                       type="button"
-                      className="delete-btn"
+                      className="s-act"
                       title={t("sidebarPanel.deleteSession")}
                       aria-label={t("sidebarPanel.deleteSession")}
                       onClick={(e) => {
@@ -330,13 +363,21 @@ export function Sidebar({
                     >
                       <I.x size={12} />
                     </button>
-                  </>
+                  </span>
                 )}
               </div>
             );
           })}
         </div>
       </div>
+        </>
+      ) : (
+        <FileTree
+          workspaceDir={workspaceDir}
+          onOpenFile={onOpenFile}
+          onToggleSidebarTab={setSidebarTab}
+        />
+      )}
 
       <div className="side-foot">
         <div className="row" onClick={onOpenRules}>

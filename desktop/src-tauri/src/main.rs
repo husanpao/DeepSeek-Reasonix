@@ -309,6 +309,19 @@ fn write_text_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, &content).map_err(|e| format!("write failed: {e}"))
 }
 
+#[tauri::command]
+fn read_text_file(path: String) -> Result<String, String> {
+    const MAX_BYTES: u64 = 1_048_576; // 1 MB
+    let meta = std::fs::metadata(&path).map_err(|e| format!("read metadata: {e}"))?;
+    if meta.len() > MAX_BYTES {
+        return Err(format!(
+            "file too large: {:.1} MB (max 1 MB)",
+            meta.len() as f64 / 1_048_576.0
+        ));
+    }
+    std::fs::read_to_string(&path).map_err(|e| format!("read failed: {e}"))
+}
+
 fn sanitize_image_extension(raw: Option<&str>) -> String {
     let cleaned = raw
         .map(|s| s.trim().trim_start_matches('.').to_ascii_lowercase())
@@ -391,6 +404,7 @@ fn main() {
             list_workspace_tree,
             git_status,
             write_text_file,
+            read_text_file,
             save_clipboard_image
         ])
         .setup(|app| {

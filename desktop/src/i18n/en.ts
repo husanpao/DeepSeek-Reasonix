@@ -92,6 +92,7 @@ export const en = {
     insertImage: "Insert image (@ mention)",
     switchModel: "Switch model",
     switchEffort: "Switch reasoning effort",
+    switchMode: "Edit mode",
     slashHeader: "Commands — control agent, model, and session",
     atHeader: "Mentions — files in the workspace",
     noMatches: "No matches",
@@ -459,6 +460,7 @@ export const en = {
       modeSwitched: "Mode: {mode}",
       taskComplete: "Task complete",
     },
+    selectFileToView: "Select a file to view",
     cmd: {
       newSession: "New session",
       clearChat: "Clear screen",
@@ -674,6 +676,7 @@ export const en = {
   contextPanel: {
     reservedKey: "reserved",
     usedKey: "used",
+    chatTab: "Chat",
     filesTab: "Files",
     toolsTab: "Tools",
     memoryTab: "Memory",
@@ -786,6 +789,18 @@ export const en = {
     memoryProject: "PROJECT · project rules",
     memoryReference: "REFERENCE · references",
     unknownKind: "# unknown card kind — fallback render",
+  },
+  sidebarTabs: {
+    sessions: "Chats",
+    files: "Project",
+  },
+  fileTree: {
+    noWorkspace: "No workspace selected",
+    setWorkspace: "Switch workspace",
+    loading: "Loading…",
+    empty: "No files found",
+    refresh: "Refresh",
+    retry: "Retry",
   },
   thread: {
     toolCalls: "{count} tool calls",

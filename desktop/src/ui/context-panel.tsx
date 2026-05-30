@@ -9,7 +9,7 @@ import type { McpSpecInfo, MemoryDetail, MemoryEntryInfo } from "../protocol";
 import { PanelErrorBoundary } from "./error-boundary";
 import { McpServerCard } from "./mcp-server-card";
 
-export type ContextPanelTab = "files" | "tools" | "memory" | "rules";
+export type ContextPanelTab = "chat" | "files" | "tools" | "memory" | "rules";
 
 const CONTEXT_MAX_TOKENS = 1_000_000;
 
@@ -23,6 +23,7 @@ export function ContextPanel({
   memoryDetail,
   activeTab,
   activeTabNonce,
+  chatContent,
   onReadMemory,
   onOpenMcpSettings,
   onEditMcpSpec,
@@ -37,13 +38,14 @@ export function ContextPanel({
   memoryDetail: MemoryDetail | null;
   activeTab?: ContextPanelTab;
   activeTabNonce?: number;
+  chatContent?: React.ReactNode;
   onReadMemory: (path: string) => void;
   onOpenMcpSettings?: () => void;
   onEditMcpSpec?: (spec: McpSpecInfo) => void;
   onRetryMcpSpec?: (raw: string) => void;
 }) {
   useLang();
-  const [tab, setTab] = useState<ContextPanelTab>("files");
+  const [tab, setTab] = useState<ContextPanelTab>("chat");
   useEffect(() => {
     if (activeTab) setTab(activeTab);
   }, [activeTab, activeTabNonce]);
@@ -61,6 +63,9 @@ export function ContextPanel({
   return (
     <aside className="ctx">
       <div className="ctx-tabs">
+        <div className="ctx-tab" data-active={tab === "chat"} onClick={() => setTab("chat")}>
+          {t("contextPanel.chatTab")}
+        </div>
         <div className="ctx-tab" data-active={tab === "files"} onClick={() => setTab("files")}>
           {t("contextPanel.filesTab")}
         </div>
@@ -110,20 +115,25 @@ export function ContextPanel({
 
         <div className="ctx-body-tab">
           <PanelErrorBoundary key={tab} label={tab}>
-            {tab === "files" && <CtxFiles files={sessionFiles} settings={settings} />}
-            {tab === "tools" && (
-              <CtxTools
-                specs={mcpSpecs}
-                bridged={mcpBridged}
-                onOpenSettings={onOpenMcpSettings}
-                onEdit={onEditMcpSpec}
-                onRetry={onRetryMcpSpec}
-              />
+            {tab === "chat" && <div className="ctx-chat-container">{chatContent}</div>}
+            {tab !== "chat" && (
+              <div className="ctx-body-tab-scroll">
+                {tab === "files" && <CtxFiles files={sessionFiles} settings={settings} />}
+                {tab === "tools" && (
+                  <CtxTools
+                    specs={mcpSpecs}
+                    bridged={mcpBridged}
+                    onOpenSettings={onOpenMcpSettings}
+                    onEdit={onEditMcpSpec}
+                    onRetry={onRetryMcpSpec}
+                  />
+                )}
+                {tab === "memory" && (
+                  <CtxMemory entries={memory} detail={memoryDetail} onRead={onReadMemory} />
+                )}
+                {tab === "rules" && <CtxRules settings={settings} />}
+              </div>
             )}
-            {tab === "memory" && (
-              <CtxMemory entries={memory} detail={memoryDetail} onRead={onReadMemory} />
-            )}
-            {tab === "rules" && <CtxRules settings={settings} />}
           </PanelErrorBoundary>
         </div>
       </div>

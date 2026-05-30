@@ -28,11 +28,16 @@ type ModeEntry = { k: EditMode; label: TKey; icon: React.ReactNode; hint: TKey }
 const EFFORTS: readonly ReasoningEffort[] = ["low", "medium", "high", "max"];
 
 const MODE_INFO: ModeEntry[] = [
-  { k: "plan", label: "editMode.plan", icon: <I.list size={11} />, hint: "editMode.planHint" },
-  { k: "review", label: "editMode.review", icon: <I.shield size={11} />, hint: "editMode.reviewHint" },
-  { k: "auto", label: "editMode.auto", icon: <I.zap size={11} />, hint: "editMode.autoHint" },
-  { k: "yolo", label: "editMode.yolo", icon: <I.warn size={11} />, hint: "editMode.yoloHint" },
+  { k: "plan", label: "editMode.plan", icon: <I.list size={12} />, hint: "editMode.planHint" },
+  { k: "review", label: "editMode.review", icon: <I.shield size={12} />, hint: "editMode.reviewHint" },
+  { k: "auto", label: "editMode.auto", icon: <I.zap size={12} />, hint: "editMode.autoHint" },
+  { k: "yolo", label: "editMode.yolo", icon: <I.warn size={12} />, hint: "editMode.yoloHint" },
 ];
+
+function editModeLabel(mode: EditMode): TKey {
+  const entry = MODE_INFO.find((x) => x.k === mode);
+  return entry ? entry.label : "editMode.review";
+}
 
 export function ModeSwitch({
   mode,
@@ -223,6 +228,7 @@ export function Composer({
   queuedSends,
   onQueueWhileBusy,
   onDequeueSend,
+  actions,
 }: {
   draft: string;
   setDraft: React.Dispatch<React.SetStateAction<string>>;
@@ -254,6 +260,8 @@ export function Composer({
   /** Called when the user presses Enter while busy with a non-empty draft. Owns clearing the draft. */
   onQueueWhileBusy?: (text: string) => void;
   onDequeueSend?: (index: number) => void;
+  /** Extra action buttons rendered in the hint-row (right side). */
+  actions?: React.ReactNode;
 }) {
   const [popup, setPopup] = useState<Popup>(null);
   const [pickedChips, setPickedChips] = useState<Map<string, Chip["kind"]>>(new Map());
@@ -659,7 +667,6 @@ export function Composer({
                 </span>
               </span>
               <span className="grow" />
-              <ModeSwitch mode={editMode} onChange={onEditModeChange} />
               <span className="hint-sep" />
               <span>
                 <Shortcut keys={["enter"]} /> {t("composer.queue")} &nbsp;·&nbsp;{" "}
@@ -668,18 +675,25 @@ export function Composer({
             </>
           ) : (
             <>
-              <span>
-                <Shortcut keys={["/"]} /> {t("composer.commands")} &nbsp;·&nbsp;{" "}
-                <Shortcut keys={["@"]} /> {t("composer.mentionFiles")}
-                &nbsp;·&nbsp; <Shortcut keys={["mod", "K"]} /> {t("composer.commandPalette")}
-              </span>
+              {!actions && (
+                <span>
+                  <Shortcut keys={["/"]} /> {t("composer.commands")} &nbsp;·&nbsp;{" "}
+                  <Shortcut keys={["@"]} /> {t("composer.mentionFiles")}
+                  &nbsp;·&nbsp; <Shortcut keys={["mod", "K"]} /> {t("composer.commandPalette")}
+                </span>
+              )}
               <span className="grow" />
-              <ModeSwitch mode={editMode} onChange={onEditModeChange} />
-              <span className="hint-sep" />
-              <span>
-                <Shortcut keys={["enter"]} /> {t("composer.send")} &nbsp;{" "}
-                <Shortcut keys={["shift", "enter"]} /> {t("composer.newline")}
-              </span>
+              {actions ? (
+                <span className="hint-actions">{actions}</span>
+              ) : (
+                <>
+                  <span className="hint-sep" />
+                  <span>
+                    <Shortcut keys={["enter"]} /> {t("composer.send")} &nbsp;{" "}
+                    <Shortcut keys={["shift", "enter"]} /> {t("composer.newline")}
+                  </span>
+                </>
+              )}
             </>
           )}
         </div>
@@ -779,13 +793,14 @@ export function Composer({
               >
                 <I.brain size={12} />
                 <span>{modelLabel}</span>
-                <span className="badge">{reasoningEffort}</span>
+                <span className="badge">{t(editModeLabel(editMode))}</span>
                 <I.chev size={10} />
               </button>
               {modelMenuOpen ? (
                 <ModelEffortMenu
                   modelLabel={modelLabel}
                   currentEffort={reasoningEffort}
+                  editMode={editMode}
                   onPickModel={(m) => {
                     onModelChange(m);
                     setModelMenuOpen(false);
@@ -794,6 +809,7 @@ export function Composer({
                     onEffortChange(e);
                     setModelMenuOpen(false);
                   }}
+                  onEditModeChange={onEditModeChange}
                 />
               ) : null}
             </div>
@@ -955,13 +971,17 @@ const KNOWN_MODELS: readonly string[] = ["deepseek-v4-flash", "deepseek-v4-pro"]
 function ModelEffortMenu({
   modelLabel,
   currentEffort,
+  editMode,
   onPickModel,
   onPickEffort,
+  onEditModeChange,
 }: {
   modelLabel: string;
   currentEffort: ReasoningEffort;
+  editMode: EditMode;
   onPickModel: (model: string) => void;
   onPickEffort: (effort: ReasoningEffort) => void;
+  onEditModeChange: (mode: EditMode) => void;
 }) {
   const [draft, setDraft] = useState(modelLabel);
   return (
@@ -993,6 +1013,7 @@ function ModelEffortMenu({
             <div className="nm">
               <span className="cmd">{m}</span>
             </div>
+            {m === modelLabel ? <I.check size={12} /> : null}
           </div>
         ))}
         <div style={{ padding: "6px 8px", display: "flex", gap: 6 }}>
@@ -1032,6 +1053,28 @@ function ModelEffortMenu({
               <span className="cmd">{e}</span>
               <div className="desc">{t(`effort.${e}Desc` as TKey)}</div>
             </div>
+            {e === currentEffort ? <I.check size={12} /> : null}
+          </div>
+        ))}
+      </div>
+      <div className="ph" style={{ marginTop: 4 }}>
+        <span className="tok">P</span>
+        <span>{t("composer.switchMode")}</span>
+      </div>
+      <div className="popup-list">
+        {MODE_INFO.map((m) => (
+          <div
+            key={m.k}
+            className="popup-item"
+            data-active={editMode === m.k}
+            onClick={() => onEditModeChange(m.k)}
+          >
+            <span className="ico">{m.icon}</span>
+            <div className="nm">
+              <span className="cmd">{t(m.label)}</span>
+              <div className="desc">{t(m.hint)}</div>
+            </div>
+            {editMode === m.k ? <I.check size={12} /> : null}
           </div>
         ))}
       </div>

@@ -93,6 +93,7 @@ export const zhCN: typeof en = {
     insertImage: "插入图片 (@ 提及)",
     switchModel: "切换模型",
     switchEffort: "切换推理强度",
+    switchMode: "编辑模式",
     slashHeader: "命令 — 控制 agent、模型与会话",
     atHeader: "提及 — 工作区中的文件",
     noMatches: "无匹配项",
@@ -482,6 +483,7 @@ export const zhCN: typeof en = {
       modeSwitched: "模式: {mode}",
       taskComplete: "任务已完成",
     },
+    selectFileToView: "选择一个文件查看",
     cmd: {
       newSession: "新建会话",
       clearChat: "清屏",
@@ -659,6 +661,7 @@ export const zhCN: typeof en = {
   contextPanel: {
     reservedKey: "预留",
     usedKey: "已用",
+    chatTab: "会话",
     filesTab: "文件",
     toolsTab: "工具",
     memoryTab: "记忆",
@@ -771,6 +774,18 @@ export const zhCN: typeof en = {
     memoryProject: "PROJECT · 项目规范",
     memoryReference: "REFERENCE · 引用资料",
     unknownKind: "# 未知卡片类型 — fallback 渲染",
+  },
+  sidebarTabs: {
+    sessions: "聊天",
+    files: "项目",
+  },
+  fileTree: {
+    noWorkspace: "未选择工作目录",
+    setWorkspace: "切换工作目录",
+    loading: "加载中…",
+    empty: "未找到文件",
+    refresh: "刷新",
+    retry: "重试",
   },
   thread: {
     toolCalls: "{count} 个工具调用",
