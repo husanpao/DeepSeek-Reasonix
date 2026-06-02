@@ -301,6 +301,21 @@ export interface SandboxView {
   allowWrite: string[];
 }
 
+export interface NetworkProxyView {
+  type: string;
+  server: string;
+  port: number;
+  username: string;
+  password: string;
+}
+
+export interface NetworkView {
+  proxyMode: string; // "auto" | "custom" | "off" (backend may still return legacy "env")
+  proxyUrl: string;
+  noProxy: string;
+  proxy: NetworkProxyView;
+}
+
 export interface AgentView {
   temperature: number;
   maxSteps: number;
@@ -313,6 +328,7 @@ export interface SettingsView {
   providers: ProviderView[];
   permissions: PermissionsView;
   sandbox: SandboxView;
+  network: NetworkView;
   agent: AgentView;
   configPath: string;
   providerKinds: string[]; // provider implementations the kernel registered (for the kind picker)

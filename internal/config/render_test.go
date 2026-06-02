@@ -20,6 +20,17 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 		Deny:  []string{"bash(rm -rf*)"},
 		Allow: []string{"bash(go test*)", "read_file"},
 	}
+	orig.Network = NetworkConfig{
+		ProxyMode: "custom",
+		NoProxy:   "localhost,127.0.0.1",
+		Proxy: NetworkProxyConfig{
+			Type:     "socks5",
+			Server:   "127.0.0.1",
+			Port:     7890,
+			Username: "user",
+			Password: "${REASONIX_PROXY_PASSWORD}",
+		},
+	}
 	orig.Skills.Paths = []string{"~/my-skills", "../shared/skills"}
 	orig.Plugins = []PluginEntry{
 		{Name: "example", Command: "reasonix-plugin-example"},
@@ -81,6 +92,9 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 	}
 	if len(got.Permissions.Allow) != 2 {
 		t.Errorf("permissions.allow = %v, want 2 entries", got.Permissions.Allow)
+	}
+	if got.Network.ProxyMode != "custom" || got.Network.Proxy.Type != "socks5" || got.Network.Proxy.Port != 7890 {
+		t.Errorf("network proxy not preserved: %+v", got.Network)
 	}
 	if len(got.Skills.Paths) != 2 || got.Skills.Paths[0] != "~/my-skills" {
 		t.Errorf("skills.paths = %v", got.Skills.Paths)
