@@ -480,6 +480,23 @@ export function Composer({
     [atRaw, atFrag, entries, searchEntries],
   );
 
+  // Unified menu item model for the @ menu. "past:chats" is a real selectable
+  // item (kind "pastChats"), not an active===0 special case.
+  type AtMenuItem =
+    | { kind: "pastChats" }
+    | { kind: "file"; entry: DirEntry };
+
+  const includePastChatsItem = atRaw !== null && atDir === "";
+
+  const atMenuItems = useMemo<AtMenuItem[]>(
+    () => [
+      ...(includePastChatsItem ? [{ kind: "pastChats" as const }] : []),
+      ...atMatches.map((entry) => ({ kind: "file" as const, entry })),
+    ],
+    [includePastChatsItem, atMatches],
+  );
+
+
   // --- which menu (if any) is open --- (slash command names win; then slash
   // arguments; then @-refs — they're rarely valid at once)
   const menuMode: "slash" | "slasharg" | "at" | null =
@@ -496,7 +513,7 @@ export function Composer({
       : menuMode === "slasharg"
         ? argRes!.items.length
         : menuMode === "at"
-          ? atMatches.length + 1
+          ? atMenuItems.length
           : 0;
 
   // Reset highlight + un-dismiss whenever the active query changes.
@@ -504,6 +521,17 @@ export function Composer({
     setActive(0);
     setDismissed(false);
   }, [slashQuery, atRaw]);
+
+  // When the @ trigger disappears (user deleted the @), close the past:chats
+  // sub-menu and reset related state. Without this, showPastChats can outlive
+  // the @ token and leave the session list visible with no way to dismiss it.
+  useEffect(() => {
+    if (menuMode !== "at" && showPastChats) {
+      setShowPastChats(false);
+      setPastChatQuery("");
+      setActive(0);
+    }
+  }, [menuMode]);
 
   const setTextCaretEnd = (next: string) => {
     setText(next);
@@ -974,6 +1002,8 @@ export function Composer({
   // --- past:chats session reference ---
   const openPastChats = async () => {
     setShowPastChats(true);
+    setActive(0);
+    setPastChatQuery("");
     setLoadingPastChats(true);
     try {
       const sessions = await app.ListSessions();
@@ -1019,6 +1049,13 @@ export function Composer({
     ? filteredPastChats.length
     : countBase;
 
+  // Clamp active index when the menu item count changes (e.g. switching
+  // between file list and past:chats list, or filtering sessions).
+  useEffect(() => {
+    const maxIdx = Math.max(0, count - 1);
+    setActive((prev) => (prev > maxIdx ? 0 : prev));
+  }, [count]);
+
   const removeAtToken = (value: string) => {
     return value.replace(/(?:^|\s)@[^\s]*$/, "").trimEnd();
   };
@@ -1058,17 +1095,29 @@ export function Composer({
   };
 
   const pickActive = () => {
-    if (menuMode === "slash") pickCommand(slashMatches[active]);
-    else if (menuMode === "slasharg" && argRes) pickArg(argRes.items[active]);
-    else if (menuMode === "at") {
+    if (menuMode === "slash") {
+      const item = slashMatches[active];
+      if (item) pickCommand(item);
+      return;
+    }
+    if (menuMode === "slasharg" && argRes) {
+      const item = argRes.items[active];
+      if (item) pickArg(item);
+      return;
+    }
+    if (menuMode === "at") {
       if (showPastChats) {
         const session = filteredPastChats[active];
         if (session) pickSession(session);
-      } else if (active === 0) {
-        openPastChats();
-      } else {
-        pickEntry(atMatches[active - 1]);
+        return;
       }
+      const item = atMenuItems[active];
+      if (!item) return;
+      if (item.kind === "pastChats") {
+        void openPastChats();
+        return;
+      }
+      pickEntry(item.entry);
     }
   };
 
@@ -1084,31 +1133,21 @@ export function Composer({
       return;
     }
 
-    const target = e.target as HTMLElement;
-
-    // When the past:chats search box has focus, ArrowDown/Up/Enter/Tab/Escape
-    // should still drive menu navigation (the search box only handles typing
-    // and Backspace). Without this the keyboard is trapped in the input.
-    const inPastChatsSearch =
-      showPastChats && menuMode === "at" && target !== e.currentTarget && target.tagName === "INPUT";
-
     if (menuMode && !composing) {
-      if (e.key === "ArrowDown") {
+      if (e.key === "ArrowDown" && count > 0) {
         e.preventDefault();
         setActive((i) => (i + 1) % count);
         return;
       }
-      if (e.key === "ArrowUp") {
+      if (e.key === "ArrowUp" && count > 0) {
         e.preventDefault();
         setActive((i) => (i - 1 + count) % count);
         return;
       }
       if (e.key === "Enter" || e.key === "Tab") {
-        if (inPastChatsSearch || target === e.currentTarget) {
-          e.preventDefault();
-          pickActive();
-          return;
-        }
+        e.preventDefault();
+        pickActive();
+        return;
       }
       if (e.key === "Escape") {
         e.preventDefault();
@@ -1123,10 +1162,6 @@ export function Composer({
       }
     }
 
-    // Guard: don't handle remaining keys when focus is in a child input
-    // (e.g. the past:chats search box); let the child handle them.
-    if (target !== e.currentTarget) return;
-
     // Enter sends; Shift+Enter newline. `composing` guards IME confirms.
     if (e.key === "Enter" && !e.shiftKey && !composing) {
       e.preventDefault();
@@ -1137,6 +1172,29 @@ export function Composer({
     if (e.key === "Escape" && running && !decisionPending) {
       e.preventDefault();
       handleCancel();
+    }
+  };
+
+  // Keydown handler for the past:chats search <input>. The search input is a
+  // sibling of the <textarea>, so keyboard events never reach the textarea's
+  // onKeyDown. We intercept navigation keys here and delegate to the same
+  // menu logic. Regular typing keys (letters, Backspace, etc.) pass through
+  // so the user can type a search query.
+  const onPastChatSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === "Tab" || e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "ArrowDown" && count > 0) {
+        setActive((i) => (i + 1) % count);
+      } else if (e.key === "ArrowUp" && count > 0) {
+        setActive((i) => (i - 1 + count) % count);
+      } else if (e.key === "Enter" || e.key === "Tab") {
+        pickActive();
+      } else if (e.key === "Escape") {
+        setPastChatQuery("");
+        setShowPastChats(false);
+        setActive(0);
+      }
     }
   };
 
@@ -1277,6 +1335,7 @@ export function Composer({
                       setPastChatQuery(ev.target.value);
                       setActive(0);
                     }}
+                    onKeyDown={onPastChatSearchKeyDown}
                   />
                 </div>
                 {filteredPastChats.length === 0 ? (
@@ -1342,19 +1401,25 @@ export function Composer({
           </div>
         ) : (
           <div className="slashmenu" role="listbox">
-            <button
-              className={`slashmenu__item slashmenu__item--special${active === 0 ? " slashmenu__item--active" : ""}`}
-              onMouseDown={(ev) => {
-                ev.preventDefault();
-                openPastChats();
-              }}
-              onMouseMove={() => setActive(0)}
-            >
-              <MessageSquare size={13} className="filemenu__icon" />
-              <span className="slashmenu__name">past:chats</span>
-              <span className="slashmenu__desc">引用历史会话</span>
-            </button>
-            <FileMenu items={atMatches} activeIndex={active - 1} onPick={pickEntry} onHover={(i) => setActive(i + 1)} />
+            {includePastChatsItem && (
+              <button
+                className={`slashmenu__item${active === 0 ? " slashmenu__item--active" : ""}`}
+                onMouseDown={(ev) => {
+                  ev.preventDefault();
+                  void openPastChats();
+                }}
+                onMouseMove={() => setActive(0)}
+              >
+                <MessageSquare size={13} className="filemenu__icon" />
+                <span className="slashmenu__name">past:chats</span>
+              </button>
+            )}
+            <FileMenu
+              items={atMatches}
+              activeIndex={active - (includePastChatsItem ? 1 : 0)}
+              onPick={pickEntry}
+              onHover={(i) => setActive(i + (includePastChatsItem ? 1 : 0))}
+            />
           </div>
         )
       )}
